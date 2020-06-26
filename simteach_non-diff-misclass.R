@@ -1,27 +1,21 @@
 
 #######################################################################################################
 #
-# Purpose: To demonstrate one way to simulate non-differential misclassification (NDM) and dependent
-#           NDM, with the goals of giving an example where NDM leads to bias away from the null and 
-#           concretizing the difference between bias and error
+# Purpose: To demonstrate one way to simulate non-differential misclassification (NDM) scenarios and
+#           to estimate bias under those scenarios 
 #
 # Author: Jacqueline E. Rudolph
 #
-# Required packages: ggplot2, tidyverse, mvtnorm
+# Required packages: ggplot2, tidyverse
 #
-# Last Updated: 11 mar 2020
+# Last Updated: 17 Jun 2020
 #
 #######################################################################################################
 
-##Set your working directory and load in necessary packages
+##Load in necessary packages
 
-setwd("your_working_directory")
-
-packages <- c("tidyverse" ,"ggplot2", "mvtnorm")
+packages <- c("tidyverse" ,"ggplot2")
 for (package in packages) {
-  if (!require(package, character.only=T, quietly=T)) {
-    install.packages(package,repos='http://lib.stat.cmu.edu/R/CRAN') 
-  }
   library(package, character.only=T)
 }
 
@@ -33,6 +27,8 @@ results <- data.frame(
   delta1=NA,
   delta2=NA,
   delta3=NA, 
+  delta4=NA,
+  delta5=NA,
   stringsAsFactors = FALSE
 )
 
@@ -49,36 +45,44 @@ simloop <- function(r, n) {
   results$rep <- r
   
   #Create 2 continuous confounders (M1 and M2)
-  #Both are normally distributed with mean 0 and s.d. 1
-  m <- rmvnorm(n, mean=rep(0, 2)) 
+  #Both are log normally distributed: the corresponding normal distributions have mean 0 and s.d. 1
+  m1 <- rlnorm(n, meanlog=0, sdlog=1)
+  m2 <- rlnorm(n, meanlog=0, sdlog=1)
   
   #Create binary exposure, P(A=1)=0.5
   #A affected by M1 and M2: both with log(OR) of log(2)
-  a <- rbinom(n, 1, 1/(1 + exp(-(-log(1/0.5 - 1) + log(2)*m[ , 1] + log(2)*m[ , 2]))))
+  a <- rbinom(n, 1, 1/(1 + exp(-(-log(1/0.5 - 1) + log(2)*m1 + log(2)*m2))))
   
   #Continuous outcome affected by exposure and confounders
   #Normally distributed with mean determined by formula below and s.d. 6
   #Intercept of 10; mean difference of 2 for A, M1, and M2
-  y <- rnorm(n, mean=(10 + 2*a + 2*m[ , 1] + 2*m[ , 2]), sd=6)
+  y <- rnorm(n, mean=(10 + 2*a + 2*m1 + 2*m2), sd=6)
   
   #Exposure with NDM
   #We select 15% of the sample to have misclassified A
-  error_a <- rnorm(n) #We use error_a to determine misclassification in anticipation of dependency below
-  a2 <- ifelse(error_a > qnorm(0.85), 1 - a, a) #Misclassified exposure
-  
-  #Induce NDM of M1 that is correlated with error in exposure
-  #because misclassified variables both affected by error_a
-  m2 <- m
-  m2[ , 1]  <- m[ , 1] - 0.9*error_a #Mismeasured M1, with extent of error dependent on error_a
+  error <- rnorm(n) #We use "error" to determine misclassification in anticipation of dependency below
+  a.err <- a
+    a.err <- ifelse(a==1 & error > qnorm(0.85), 0, a.err) #Set sensitivity to 0.85
+    a.err <- ifelse(a==0 & error > qnorm(0.95), 1, a.err) #Set specificity to 0.95
+    
+  #Induce NDM of M1 that is (1) independent of and (2) dependent with the error in exposure
+  m1.indep <- m1 + 0.9*runif(n, min=-1, max=1) #Mismeasured M1, independent of error in A
+  m1.dep  <- m1 + 0.9*error #Mismeasured M1, dependent with error in A (because both depend on "error")
   
   #Scenario 1: Linear model under no misclassification
-  results$delta1 <- summary(glm(y ~ a + m[ , 1] + m[ , 2], family=gaussian(link="identity")))$coefficients[2]
+  results$delta1 <- summary(glm(y ~ a + m1 + m2, family=gaussian(link="identity")))$coefficients[2]
   
-  #Scenario 2: Linear model under misclassification of binary exposure
-  results$delta2 <- summary(glm(y ~ a2 + m[ , 1] + m[ , 2], family=gaussian(link="identity")))$coefficients[2]
+  #Scenario 2: Linear model under NDM of binary exposure only
+  results$delta2 <- summary(glm(y ~ a.err + m1 + m2, family=gaussian(link="identity")))$coefficients[2]
   
-  #Scenario 3: Linear model under dependent misclassification of binary exposure and continuous confounder
-  results$delta3 <- summary(glm(y ~ a2 + m2[ , 1] + m2[ , 2], family=gaussian(link="identity")))$coefficients[2]
+  #Scenario 3: Linear model under NDM of continuous confounder only
+  results$delta3 <- summary(glm(y ~ a + m1.dep + m2, family=gaussian(link="identity")))$coefficients[2]
+  
+  #Scenario 4: Linear model under NDM of exposue and confounder, with independent errors
+  results$delta4 <- summary(glm(y ~ a.err + m1.indep + m2, family=gaussian(link="identity")))$coefficients[2]
+  
+  #Scenario 5: Linear model under NDM of exposure and confounder, with dependent errors
+  results$delta5 <- summary(glm(y ~ a.err + m1.dep + m2, family=gaussian(link="identity")))$coefficients[2]
   
   return(results)
 }
@@ -92,19 +96,24 @@ all.res <- do.call(rbind, all.res)
 ##Summarize results
 
   #Proportion of simulations that had an error in the mean difference greater than the null
-  pos.error2 <- sum((all.res$delta2 - all.res$delta1) > 0)/reps #Comparing scenario 2 to scenario 1
-  pos.error3 <- sum((all.res$delta3 - all.res$delta1) > 0)/reps #Comparing scenario 3 to scenario 1
+  pos.error2 <- sum((all.res$delta2 - 2) > 0)/reps #Comparing scenario 2 to scenario 1
+  pos.error3 <- sum((all.res$delta3 - 2) > 0)/reps #Comparing scenario 3 to scenario 1
+  pos.error4 <- sum((all.res$delta4 - 2) > 0)/reps #Comparing scenario 4 to scenario 1
+  pos.error5 <- sum((all.res$delta5 - 2) > 0)/reps #Comparing scenario 5 to scenario 1
   
   #Get the average mean difference across simulations for each scenario
   summ.res <- all.res %>% 
     summarise(avg.delta1=mean(delta1), 
               avg.delta2=mean(delta2), 
-              avg.delta3=mean(delta3)) 
+              avg.delta3=mean(delta3),
+              avg.delta4=mean(delta4),
+              avg.delta5=mean(delta5)) %>% 
+    #Compute bias by comparing the average mean differences to the true mean difference of 2
+    mutate(bias2=avg.delta2 - 2,
+           bias3=avg.delta3 - 2,
+           bias4=avg.delta4 - 2,
+           bias5=avg.delta5 - 2)
   
-  #Compare the average mean difference to the true mean difference of 2
-  summ.res$bias2 <- summ.res$avg.delta2 - 2
-  summ.res$bias3 <- summ.res$avg.delta3 - 2
-
 
 ##Visualize results
 
@@ -116,31 +125,24 @@ thm <- theme_classic() +
   )
 
     #Results for scenario 2 compared to scenario 1
-    all.res$idx <- as.numeric(all.res$delta2 > all.res$delta1)
-    cols<-c("No Misclassification"="black", "Exposure Misclassification"="red")
-    pdf("misclass1.pdf",height=5,width=5)
+    cols<-c("No Misclassification"="solid", "Exposure Misclassification"="dashed")
     ggplot(all.res) +
-      geom_density(aes(delta1, colour="No Misclassification")) +
-      geom_density(aes(delta2, colour="Exposure Misclassification")) +
-      scale_colour_manual(name="Scenario:", values=cols) + 
-      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) + 
+      geom_density(aes(delta1, linetype="No Misclassification")) +
+      geom_density(aes(delta2, linetype="Exposure Misclassification")) +
+      scale_linetype_manual(name="Scenario:", values=cols) +
+      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) +
       ylab("Density") + scale_y_continuous(expand=c(0,0), limits=c(0, 1)) +
       geom_label(aes(x=0.25, y=0.9, label="A"), size=8, label.size=0.5) + thm
-    dev.off()
-    
-    #Results for scenario 3 compared to scenario 1
-    all.res$idx <- as.numeric(all.res$delta3 > all.res$delta1)
-    cols<-c("No Misclassification"="black", "Exposure & Confounder \nMisclassification"="red")
-    pdf("misclass2.pdf",height=5,width=5)
+
+    #Results for scenario 5 compared to scenario 1
+    cols<-c("No Misclassification"="solid", "Exposure & Confounder \nMisclassification"="dashed")
     ggplot(all.res) +
-      geom_density(aes(delta3, colour="Exposure & Confounder \nMisclassification")) +
-      geom_density(aes(delta1, colour="No Misclassification")) +
-      scale_colour_manual(name="Scenario:", values=cols) + 
-      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) + 
+      geom_density(aes(delta5, linetype="Exposure & Confounder \nMisclassification")) +
+      geom_density(aes(delta1, linetype="No Misclassification")) +
+      scale_linetype_manual(name="Scenario:", values=cols) +
+      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) +
       ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 1)) +
       geom_label(aes(x=0.25, y=0.9, label="B"), size=8, label.size=0.5) + thm
-    dev.off()
-    
-    
-    
-    
+
+
+
