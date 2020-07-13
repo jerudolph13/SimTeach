@@ -27,27 +27,28 @@ n <- 1000           #Number of individuals in each sample
 set.seed(123)
 rd <- rep(NA,reps)  #Vector to hold risk difference results
 
-  #Simulate randomized treatment, with P(R=1)=0.5
-  r <- rbinom(n, 1, 0.5)
+  #Simulate randomized treatment, with P(X=1)=0.5
+  x <- rbinom(n, 1, 0.5)
 
   #Simulate binary outcome affected by treatment
-  #P(Y=1)=0.1 and the OR for R is exp(0.75)=2.12
-  y <- rbinom(n, 1, 1/(1 + exp(-(-log(1/0.1 - 1) - 0.75*(0.5) + 0.75*r))))
+  #P(Y=1)=0.5 and the RD for X is 0.05
+  p.y <- 0.5 + 0.05*x - 0.05*0.5
+  y <- rbinom(n, 1, p.y)
 
-  #Estimate the RD for R and its p-value
-  res <- glm(y ~ r, family=gaussian(link="identity"))
+  #Estimate the RD for X and its p-value
+  res <- glm(y ~ x, family=gaussian(link="identity"))
   rd_est <- summary(res)$coefficients[2]
   rd_pvalue <- summary(res)$coefficients[8]
 
   #Estimate the distribution of RDs under the null hypothesis that RD=0 
-    #Randomly assign a new exposure to each individual, still with P(R'=1)=0.5
+    #Randomly assign a new exposure to each individual, still with P(X'=1)=0.5
     #For this new exposure, estimate the RD on the original outcome
   for (i in 1:reps){
     #Draw new randomized exposure
-    r_new <- rbinom(n, 1, 0.5)
+    x_new <- rbinom(n, 1, 0.5)
 
     #Using new exposure and original outcome, estimate the RD and save its value in the rd vector
-    rd[i] <- summary(glm(y ~ r_new, family=gaussian(link="identity")))$coefficients[2]
+    rd[i] <- summary(glm(y ~ x_new, family=gaussian(link="identity")))$coefficients[2]
   }
   
   #Calculate the one-sided  p-value, by taking the proportion of reps
@@ -73,17 +74,16 @@ thm <- theme_classic() +
     ggplot() +
       geom_histogram(aes(rd, stat(density)), bins=36, color="gray", fill="lightgray") +
       geom_vline(xintercept=rd_est, color="black", size=1) +
-      geom_label(aes(x=-0.06, y=21.5, label="A"), size=8, label.size=0.5) +
-      xlab("Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.07, 0.07)) +  
-      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 23)) + thm
-    dev.off()
+      geom_label(aes(x=-0.1, y=13, label="A"), size=8, label.size=0.5) +
+      xlab("Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) +  
+      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 15)) + thm
 
     #Two-sided p-value
     ggplot() +
       geom_histogram(aes(abs(rd), stat(density)), bins=36, color="gray", fill="lightgray") +
       geom_vline(xintercept=rd_est, color="black", size=1) +
-      geom_label(aes(x=-0.06, y=46.5, label="B"), size=8, label.size=0.5) +
-      xlab("Absolute Value of the Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.07, 0.07)) + 
-      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 50)) + thm
-    dev.off()
+      geom_label(aes(x=-0.1, y=26, label="B"), size=8, label.size=0.5) +
+      xlab("Absolute Value of the Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) + 
+      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 30)) + thm
+
 
