@@ -9,4 +9,4 @@ The first ("simteach_non-diff-misclass.R") explores the direction of the bias un
 
 The second ("simteach_p-value.R") uses simulation to generate the distribution from which p-values are calculated to help explain the definition of a p-value.
 
-We also include code for a non-epidemiologic example no longer incldued in the paper that uses the formula for the area of a circle and randomly drawn points on the x,y coordinates to estimate the value of pi.
+We also include code for a non-epidemiologic example no longer included in the paper that uses the formula for the area of a circle and randomly drawn points on the x,y coordinates to estimate the value of pi.
