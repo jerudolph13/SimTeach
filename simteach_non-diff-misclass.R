@@ -8,7 +8,7 @@
 #
 # Required packages: ggplot2, tidyverse
 #
-# Last Updated: 17 Jun 2020
+# Last Updated: 15 Oct 2020
 #
 #######################################################################################################
 
@@ -33,7 +33,7 @@ results <- data.frame(
 )
 
 
-##Run simulation  
+# Run simulation ----------------------------------------------------------
 
 reps <- 10000 #The number of simulations
 n <- 1000     #Sample size within each simulation
@@ -93,7 +93,7 @@ all.res <- lapply(1:reps, function(x) {simloop(x, n)})
 all.res <- do.call(rbind, all.res)
 
 
-##Summarize results
+# Summarize ---------------------------------------------------------------
 
   #Proportion of simulations that had an error in the mean difference greater than the null
   pos.error2 <- sum((all.res$delta2 - 2) > 0)/reps #Comparing scenario 2 to scenario 1
@@ -115,34 +115,55 @@ all.res <- do.call(rbind, all.res)
            bias5=avg.delta5 - 2)
   
 
-##Visualize results
+# Visualize ---------------------------------------------------------------
+
+#Set formatting options
 
 thm <- theme_classic() +
   theme(
-    legend.position = "bottom",
+    #Format text
+    axis.title = element_text(family="Helvetica", size=16, color="black"),
+    legend.text = element_text(family="Helvetica", size=16, color="black", margin=margin(t=0.25,b=0.25, unit="lines")),
+    legend.title = element_text(family="Helvetica", size=16, color="black"),
+    axis.text = element_text(family="Helvetica", size=16, color="black"),
+    
+    #Format axes
+    axis.line = element_line(size=0.75),
+    axis.ticks = element_line(size=0.75),
+    
+    #Format legend
+    legend.title.align = 0.5,
+    legend.position = c(0.85, 0.8),
     legend.background = element_rect(fill = "transparent", colour = NA),
-    legend.key = element_rect(fill = "transparent", colour = NA)
+    legend.key = element_rect(fill = "transparent", colour = NA),
+    legend.direction="vertical",
+    legend.box.background = element_rect(colour = "black", size=0.75),
+    
+    #Add space around plot
+    plot.margin = unit(c(2, 2, 2, 2), "lines")
   )
 
-    #Results for scenario 2 compared to scenario 1
-    cols<-c("No Misclassification"="solid", "Exposure Misclassification"="dashed")
-    ggplot(all.res) +
-      geom_density(aes(delta1, linetype="No Misclassification")) +
-      geom_density(aes(delta2, linetype="Exposure Misclassification")) +
-      scale_linetype_manual(name="Scenario:", values=cols) +
-      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) +
-      ylab("Density") + scale_y_continuous(expand=c(0,0), limits=c(0, 1)) +
-      geom_label(aes(x=0.25, y=0.9, label="A"), size=8, label.size=0.5) + thm
+#Compare results of Scenarios 1, 2, and 5
+    #Define custom legend labels
+    cols<-c("None"="solid", "Exposure"="dashed", "Exposure & \nConfounder"="dotted")
 
-    #Results for scenario 5 compared to scenario 1
-    cols<-c("No Misclassification"="solid", "Exposure & Confounder \nMisclassification"="dashed")
-    ggplot(all.res) +
-      geom_density(aes(delta5, linetype="Exposure & Confounder \nMisclassification")) +
-      geom_density(aes(delta1, linetype="No Misclassification")) +
-      scale_linetype_manual(name="Scenario:", values=cols) +
-      xlab("Mean Difference") + scale_x_continuous(expand=c(0, 0), limits=c(0, 4)) +
-      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 1)) +
-      geom_label(aes(x=0.25, y=0.9, label="B"), size=8, label.size=0.5) + thm
+    pdf("./missclass_fig.pdf", height=6, width=9)
+    ggplot(all.res) + thm +
+      #Plot labels
+      labs(x="\n Mean Difference", y="Density \n") +
+    
+      #Generate plots
+      stat_density(aes(delta1, linetype="None"), geom="line", size=0.75) +
+      stat_density(aes(delta2, linetype="Exposure"), geom="line", size=0.75) +
+      stat_density(aes(delta5, linetype="Exposure & \nConfounder"), geom="line", size=0.75) +
+      
+      #Create custom legend
+      scale_linetype_manual(name="Misclassified \n Variable(s)", values=cols) +
+      annotate(geom="segment", x=3.55, xend=4.63, y=0.88, yend=0.88, size=0.75, color="black") +
 
+      #Define axis options
+      scale_x_continuous(expand=c(0, 0), limits=c(-1, 5), breaks=c(-1, 0, 1, 2, 3, 4, 5)) +
+      scale_y_continuous(expand=c(0,0), limits=c(0,1)) 
+    dev.off()
 
 

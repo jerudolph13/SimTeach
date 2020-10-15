@@ -5,21 +5,21 @@
 #
 # Author: Jacqueline E. Rudolph
 #
-# Required packages: ggplot2
+# Required packages: ggplot2, ggpubr
 #
-# Last Updated: 09 Jun 2020
+# Last Updated: 15 Oct 2020
 #
 #######################################################################################################
 
 ##Load in necessary packages
 
-packages <- c("ggplot2")
+packages <- c("ggplot2", "ggpubr")
 for (package in packages) {
   library(package, character.only=T)
 }
 
 
-##Set up the simulation
+# Run simulation ----------------------------------------------------------
 
 reps <- 10000       #Number of permutations
 n <- 1000           #Number of individuals in each sample
@@ -51,6 +51,9 @@ rd <- rep(NA,reps)  #Vector to hold risk difference results
     rd[i] <- summary(glm(y ~ x_new, family=gaussian(link="identity")))$coefficients[2]
   }
   
+
+# Summarize ---------------------------------------------------------------
+  
   #Calculate the one-sided  p-value, by taking the proportion of reps
   #that had a RD greater than the RD from the original sample
   prop1 <- sum(rd > rd_est)/reps
@@ -60,30 +63,53 @@ rd <- rep(NA,reps)  #Vector to hold risk difference results
     #In other words, the absolute value of the RD was greater than the original RD
   prop2 <- sum(abs(rd) > rd_est)/reps
   
-  
-##Visualize the results
 
+# Visualize ---------------------------------------------------------------
+
+#Set formatting options
+  
 thm <- theme_classic() +
   theme(
-    legend.position = "bottom",
-    legend.background = element_rect(fill = "transparent", colour = NA),
-    legend.key = element_rect(fill = "transparent", colour = NA)
+    #Format text
+    axis.title = element_text(family="Helvetica", size=16, color="black"),
+    axis.text = element_text(family="Helvetica", size=16, color="black"),
+    
+    #Use tag to label paneled plots
+    plot.tag.position="topleft",
+    plot.tag=element_text(family="Helvetica", size=16, color="black", margin=margin(r=10, b=20)),
+    
+    #Format axis
+    axis.line = element_line(size=0.75),
+    axis.ticks = element_line(size=0.75),
+    
+    #Add space around plot
+    plot.margin = unit(c(1, 1, 1, 1), "lines"),
   )
 
-    #One-sided p-value
-    ggplot() +
+#Plot one-sided p-value
+  
+    p1 <- ggplot() + thm +
+      #Plot labels
+      labs(tag="A)", x="\nRisk Difference", y="Density\n") +
+      
+      #Generate plots
       geom_histogram(aes(rd, stat(density)), bins=36, color="gray", fill="lightgray") +
-      geom_vline(xintercept=rd_est, color="black", size=1) +
-      geom_label(aes(x=-0.1, y=13, label="A"), size=8, label.size=0.5) +
-      xlab("Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) +  
-      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 15)) + thm
+      geom_vline(xintercept=rd_est, color="black", size=0.75, linetype="dashed") + 
+      
+      #Define axis options
+      scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) +  
+      scale_y_continuous(expand=c(0, 0), limits=c(0, 15))
 
-    #Two-sided p-value
-    ggplot() +
+#Plot two-sided p-value
+    
+    p2 <- ggplot() + thm +
+      labs(tag="B)", x="\nAbsolute Value of Risk Difference", y="Density\n") +
       geom_histogram(aes(abs(rd), stat(density)), bins=36, color="gray", fill="lightgray") +
-      geom_vline(xintercept=rd_est, color="black", size=1) +
-      geom_label(aes(x=-0.1, y=26, label="B"), size=8, label.size=0.5) +
-      xlab("Absolute Value of the Risk Difference") + scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) + 
-      ylab("Density") + scale_y_continuous(expand=c(0, 0), limits=c(0, 30)) + thm
+      geom_vline(xintercept=rd_est, color="black", size=0.75, linetype="dashed") +
+      scale_x_continuous(expand=c(0, 0), limits=c(-0.12, 0.12)) + 
+      scale_y_continuous(expand=c(0, 0), limits=c(0, 30))
 
+    pdf("./pvalue_fig.pdf", height=5, width=10)
+    ggarrange(p1, p2, ncol=2)
+    dev.off()
 
